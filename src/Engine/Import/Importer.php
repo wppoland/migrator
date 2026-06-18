@@ -6,6 +6,7 @@ namespace Migrator\Engine\Import;
 
 use Migrator\Engine\Archive\Manifest;
 use Migrator\Engine\Archive\Reader;
+use Migrator\Engine\Db\Dumper;
 use Migrator\Engine\Db\SearchReplace;
 use Migrator\Engine\Db\SqlExecutor;
 use Migrator\Engine\Export\Exporter;
@@ -60,6 +61,24 @@ final class Importer
             throw new \RuntimeException('Migrator: this archive was made by a newer version of Migrator.');
         }
 
+        // The dump uses the source's literal table names. If this site's prefix
+        // differs, the imported tables would not be the ones WordPress reads,
+        // leaving a silently broken site — so refuse rather than corrupt.
+        $sourcePrefix = (string) $manifest->get('tablePrefix');
+        if ('' !== $sourcePrefix && $sourcePrefix !== $this->db->prefix) {
+            throw new \RuntimeException(esc_html(sprintf(
+                'Migrator: table prefix mismatch. This archive uses "%1$s" but this site uses "%2$s". Set this site\'s $table_prefix to "%1$s" in wp-config.php and try again.',
+                $sourcePrefix,
+                $this->db->prefix
+            )));
+        }
+
+        // Multisite has its own table layout and URL handling; importing across a
+        // single-site/multisite boundary silently corrupts. Refuse for now.
+        if ((bool) $manifest->get('multisite') || is_multisite()) {
+            throw new \RuntimeException('Migrator: multisite backups are not supported yet. This archive or this site is a multisite network.');
+        }
+
         // Capture the target's identity BEFORE the DB import overwrites it.
         $target = [
             'home'    => (string) get_option('home'),
@@ -81,18 +100,34 @@ final class Importer
 
         while (($entry = $reader->nextEntry()) !== null) {
             if (Exporter::DB_ENTRY === $entry->path) {
-                $statements = $this->importDatabase($reader, $log);
+                // Safety net: snapshot the current database so a failed import
+                // (DDL auto-commits, so DROP/CREATE cannot be transaction-rolled
+                // back) can be reverted instead of leaving a dead site.
+                $rollback = $this->backupDatabase($log);
 
-                [$from, $to] = $this->replacements($source, $target);
-                if ([] !== $from) {
-                    /** @var string[] $tables */
-                    $tables   = array_map('strval', (array) $manifest->get('tables'));
-                    $search   = new SearchReplace($this->db, new SerializedReplacer($from, $to));
-                    $result   = $search->run($tables);
-                    $replaced = $result['changes'];
-                    $tablesRepl = $result['tables'];
-                    $log(sprintf('Rewrote URLs/paths in %d rows across %d tables.', $replaced, $tablesRepl));
+                try {
+                    $statements = $this->importDatabase($reader, $log);
+
+                    [$from, $to] = $this->replacements($source, $target);
+                    if ([] !== $from) {
+                        /** @var string[] $tables */
+                        $tables     = array_map('strval', (array) $manifest->get('tables'));
+                        $search     = new SearchReplace($this->db, new SerializedReplacer($from, $to));
+                        $result     = $search->run($tables);
+                        $replaced   = $result['changes'];
+                        $tablesRepl = $result['tables'];
+                        $log(sprintf('Rewrote URLs/paths in %d rows across %d tables.', $replaced, $tablesRepl));
+                    }
+                } catch (\Throwable $e) {
+                    $log('Import failed — restoring the previous database…');
+                    $this->restoreDatabase($rollback);
+                    $reader->close();
+                    throw new \RuntimeException(esc_html(
+                        'Migrator: import failed and the database was rolled back to its previous state. ' . $e->getMessage()
+                    ));
                 }
+
+                wp_delete_file($rollback);
             } elseif (str_starts_with($entry->path, 'wp-content/')) {
                 if ($importFiles && $this->extract($entry->path, $reader)) {
                     $files++;
@@ -113,6 +148,42 @@ final class Importer
             'replaced'   => $replaced,
             'files'      => $files,
         ];
+    }
+
+    /**
+     * Dump the current database to a rollback file before the import touches it.
+     */
+    private function backupDatabase(callable $log): string
+    {
+        $path   = $this->workspace->path('rollback-' . gmdate('Ymd-His') . '-' . wp_generate_password(6, false) . '.sql');
+        $handle = fopen($path, 'wb');
+        if (false === $handle) {
+            throw new \RuntimeException('Migrator: cannot create the pre-import safety backup.');
+        }
+        $dumper = new Dumper($this->db);
+        $dumper->dumpAll($dumper->tables(), $handle);
+        fclose($handle);
+
+        $log('Safety backup of the current database created.');
+
+        return $path;
+    }
+
+    /**
+     * Best-effort restore of the rollback dump after a failed import.
+     */
+    private function restoreDatabase(string $path): void
+    {
+        if (! is_readable($path)) {
+            return;
+        }
+        try {
+            (new SqlExecutor($this->db))->run((string) file_get_contents($path));
+        } catch (\Throwable $e) {
+            // Nothing more we can safely do; the rollback file is kept for manual recovery.
+            return;
+        }
+        wp_delete_file($path);
     }
 
     private function importDatabase(Reader $reader, callable $log): int
@@ -148,11 +219,26 @@ final class Importer
         }
 
         $relative = substr($archivePath, strlen('wp-content/'));
-        $target   = untrailingslashit((string) WP_CONTENT_DIR) . '/' . $relative;
+
+        // Zip-slip guard: reject any entry that tries to escape wp-content via
+        // "../" or an absolute path in the archived path.
+        if ('' === $relative || str_contains($relative, '..') || str_starts_with($relative, '/')) {
+            return false;
+        }
+
+        $base   = untrailingslashit((string) WP_CONTENT_DIR);
+        $target = $base . '/' . $relative;
 
         $dir = dirname($target);
         if (! is_dir($dir)) {
             wp_mkdir_p($dir);
+        }
+
+        // Confirm the resolved directory really sits inside wp-content.
+        $realDir  = realpath($dir);
+        $realBase = realpath($base);
+        if (false === $realDir || false === $realBase || ! str_starts_with($realDir . '/', $realBase . '/')) {
+            return false;
         }
 
         $handle = fopen($target, 'wb');

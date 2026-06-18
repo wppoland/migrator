@@ -80,7 +80,11 @@ final class SerializedReplacer
      */
     private function process(mixed $data, bool $serialised): mixed
     {
-        if (is_string($data) && '' !== $data && $this->isSerialized($data) && false !== ($un = @unserialize($data))) {
+        // Restrict unserialize to stdClass: arrays and plain objects round-trip,
+        // but a crafted archive cannot instantiate arbitrary classes (which could
+        // run __wakeup/__destruct — PHP object injection). Unknown classes decode
+        // to __PHP_Incomplete_Class and are left untouched below.
+        if (is_string($data) && '' !== $data && $this->isSerialized($data) && false !== ($un = @unserialize($data, ['allowed_classes' => ['stdClass']]))) {
             if (! $this->hasIncompleteClass($un)) {
                 $data = $this->process($un, true);
             }

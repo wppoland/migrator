@@ -97,8 +97,10 @@ final class Exporter
         $host = (string) wp_parse_url((string) get_option('home'), PHP_URL_HOST);
         $host = preg_replace('/[^a-z0-9.-]/i', '', $host) ?: 'site';
 
+        // Random token so backups are never at a guessable URL on hosts that
+        // ignore the .htaccess deny (nginx).
         return $this->workspace->path(
-            sprintf('%s-%s.migrator', $host, gmdate('Ymd-His'))
+            sprintf('%s-%s-%s.migrator', $host, gmdate('Ymd-His'), wp_generate_password(8, false))
         );
     }
 }

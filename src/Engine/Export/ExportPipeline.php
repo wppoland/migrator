@@ -174,7 +174,9 @@ final class ExportPipeline
         $host = (string) wp_parse_url((string) get_option('home'), PHP_URL_HOST);
         $host = preg_replace('/[^a-z0-9.-]/i', '', $host) ?: 'site';
 
-        return $this->workspace->path(sprintf('%s-%s.migrator', $host, gmdate('Ymd-His')));
+        // Include a random token so a backup is never at a guessable URL (hosts
+        // on nginx don't honour the .htaccess deny).
+        return $this->workspace->path(sprintf('%s-%s-%s.migrator', $host, gmdate('Ymd-His'), wp_generate_password(8, false)));
     }
 
     /**
