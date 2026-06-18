@@ -120,6 +120,41 @@ $r3->close();
 $resumed = substr($part1, 0, $half) . $part2;
 check('resumed extraction reconstructs big file', $resumed === $big);
 
+// ---- checksum detects corruption ----
+$corruptPath = $tmp . '/corrupt.migrator';
+copy($archive, $corruptPath);
+// Flip one byte inside the small file's content region.
+$smallOffset = $offsets['wp-content/uploads/small.txt']['off'];
+$fh = fopen($corruptPath, 'r+b');
+fseek($fh, $smallOffset + 2);
+fwrite($fh, '!'); // overwrite a content byte
+fclose($fh);
+
+$detected = false;
+try {
+    $rc = new Reader($corruptPath);
+    while (($e = $rc->nextEntry()) !== null) {
+        $rc->readContents(); // verifies CRC on full read
+    }
+    $rc->close();
+} catch (\RuntimeException $ex) {
+    $detected = str_contains($ex->getMessage(), 'checksum mismatch');
+}
+check('corrupted entry is caught by checksum verification', $detected);
+
+// ---- a clean archive passes full verification ----
+$clean = true;
+try {
+    $rv = new Reader($archive);
+    while (($e = $rv->nextEntry()) !== null) {
+        $rv->readContents();
+    }
+    $rv->close();
+} catch (\RuntimeException $ex) {
+    $clean = false;
+}
+check('clean archive passes full checksum verification', $clean);
+
 // cleanup
 array_map('unlink', glob($tmp . '/*') ?: []);
 @rmdir($tmp);

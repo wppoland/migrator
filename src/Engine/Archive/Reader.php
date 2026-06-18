@@ -27,6 +27,10 @@ final class Reader
 
     private int $contentOffset = 0;
 
+    private ?string $currentCrc = null;
+
+    private int $currentSize = 0;
+
     public function __construct(string $path)
     {
         $handle = fopen($path, 'rb');
@@ -70,6 +74,8 @@ final class Reader
         $entry  = Entry::fromHeader($header);
 
         $this->remaining     = $entry->size;
+        $this->currentSize   = $entry->size;
+        $this->currentCrc    = $entry->crc;
         $this->contentOffset = (int) ftell($this->handle);
 
         return $entry;
@@ -77,37 +83,79 @@ final class Reader
 
     /**
      * Read the full content of the current entry into a string. Intended for
-     * small entries (the manifest); files should be streamed.
+     * small entries (the manifest); files should be streamed. Verifies the
+     * entry checksum when one is present and the entry is read in full.
      */
     public function readContents(): string
     {
-        $buffer = '';
+        $context = $this->maybeHashContext();
+        $buffer  = '';
         while ($this->remaining > 0) {
             $chunk = (string) fread($this->handle, (int) min(self::READ_CHUNK, $this->remaining));
             if ('' === $chunk) {
                 break;
             }
-            $buffer          .= $chunk;
+            $buffer .= $chunk;
+            if (null !== $context) {
+                hash_update($context, $chunk);
+            }
             $this->remaining -= strlen($chunk);
         }
+        $this->verify($context);
 
         return $buffer;
     }
 
     /**
-     * Stream the current entry's content in chunks to a sink callback.
+     * Stream the current entry's content in chunks to a sink callback. Verifies
+     * the entry checksum when one is present and the entry is read in full.
      *
      * @param callable(string):void $sink
      */
     public function streamTo(callable $sink): void
     {
+        $context = $this->maybeHashContext();
         while ($this->remaining > 0) {
             $chunk = (string) fread($this->handle, (int) min(self::READ_CHUNK, $this->remaining));
             if ('' === $chunk) {
                 break;
             }
             $sink($chunk);
+            if (null !== $context) {
+                hash_update($context, $chunk);
+            }
             $this->remaining -= strlen($chunk);
+        }
+        $this->verify($context);
+    }
+
+    /**
+     * Start a checksum context only when the current entry has a checksum AND we
+     * are at its start (a resumed partial read cannot be verified this way).
+     *
+     * @return \HashContext|null
+     */
+    private function maybeHashContext(): ?\HashContext
+    {
+        if (null !== $this->currentCrc && $this->remaining === $this->currentSize) {
+            return hash_init('crc32b');
+        }
+
+        return null;
+    }
+
+    private function verify(?\HashContext $context): void
+    {
+        if (null === $context || null === $this->currentCrc) {
+            return;
+        }
+        $actual = hash_final($context);
+        if (! hash_equals($this->currentCrc, $actual)) {
+            throw new \RuntimeException(esc_html(sprintf(
+                'Migrator: checksum mismatch — the archive is corrupt or truncated (expected %s, got %s).',
+                $this->currentCrc,
+                $actual
+            )));
         }
     }
 

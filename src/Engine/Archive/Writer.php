@@ -48,7 +48,8 @@ final class Writer
      */
     public function addString(string $relPath, string $contents, string $type = Entry::TYPE_FILE, ?int $mtime = null): void
     {
-        $entry = new Entry($relPath, strlen($contents), $mtime ?? time(), $type);
+        $crc   = hash('crc32b', $contents);
+        $entry = new Entry($relPath, strlen($contents), $mtime ?? time(), $type, $crc);
         $this->beginEntry($entry);
         $this->writeChunk($contents);
         $this->endEntry();
@@ -61,7 +62,8 @@ final class Writer
     {
         $size  = (int) filesize($absFile);
         $mtime = (int) filemtime($absFile);
-        $entry = new Entry($relPath, $size, $mtime ?: time());
+        $crc   = hash_file('crc32b', $absFile) ?: null;
+        $entry = new Entry($relPath, $size, $mtime ?: time(), Entry::TYPE_FILE, $crc);
 
         $this->beginEntry($entry);
         $this->copyFrom($absFile, 0);

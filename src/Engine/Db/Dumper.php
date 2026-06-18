@@ -19,31 +19,41 @@ defined('ABSPATH') || exit;
  */
 final class Dumper
 {
-    private const MAX_INSERT_BYTES = 5_242_880; // Flush an INSERT once it reaches ~5 MiB.
+    private const DEFAULT_MAX_INSERT_BYTES = 5_242_880; // ~5 MiB.
+
+    private int $maxInsertBytes;
 
     public function __construct(
         private \wpdb $db,
         private int $batchSize = 1000,
     ) {
+        $this->maxInsertBytes = $this->safeInsertSize();
     }
 
     /**
-     * Tables belonging to this site (its prefix). Pass an explicit list to dump
-     * a subset (selective backup).
+     * Base tables belonging to this site (its prefix). Views are returned
+     * separately by {@see views()} so they can be created after their tables.
+     * Pass an explicit list to dump a subset (selective backup).
      *
      * @return string[]
      */
     public function tables(): array
     {
-        $like = $this->db->esc_like($this->db->prefix) . '%';
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-        $rows = $this->db->get_col($this->db->prepare('SHOW TABLES LIKE %s', $like));
-
-        return array_map('strval', $rows);
+        return $this->tablesOfType('BASE TABLE');
     }
 
     /**
-     * Dump every given table to a writable stream resource.
+     * Views belonging to this site's prefix.
+     *
+     * @return string[]
+     */
+    public function views(): array
+    {
+        return $this->tablesOfType('VIEW');
+    }
+
+    /**
+     * Dump tables (structure + data) followed by views, to a writable stream.
      *
      * @param string[] $tables
      * @param resource $handle
@@ -58,7 +68,80 @@ final class Dumper
             $this->dumpTable((string) $table, $handle);
         }
 
+        // Views are created after every base table, since they reference them.
+        foreach ($this->views() as $view) {
+            $this->dumpView($view, $handle);
+        }
+
         $this->write($handle, "SET FOREIGN_KEY_CHECKS=1;\n");
+    }
+
+    /**
+     * @return string[]
+     */
+    private function tablesOfType(string $type): array
+    {
+        $like = $this->db->esc_like($this->db->prefix) . '%';
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
+        $rows = $this->db->get_results($this->db->prepare('SHOW FULL TABLES LIKE %s', $like), ARRAY_N);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            if (isset($row[0], $row[1]) && $type === $row[1]) {
+                $out[] = (string) $row[0];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Dump a view definition (DROP + CREATE), with the DEFINER clause removed so
+     * it imports cleanly under whatever user runs the restore.
+     *
+     * @param resource $handle
+     */
+    private function dumpView(string $view, $handle): void
+    {
+        $safe = '`' . str_replace('`', '``', $view) . '`';
+        $this->write($handle, "DROP VIEW IF EXISTS {$safe};\n");
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
+        $row    = $this->db->get_row("SHOW CREATE VIEW {$safe}", ARRAY_A);
+        $create = is_array($row) ? (string) ($row['Create View'] ?? '') : '';
+        if ('' !== $create) {
+            $this->write($handle, $this->stripDefiner($create) . ";\n\n");
+        }
+    }
+
+    /**
+     * Remove the DEFINER clause and downgrade SQL SECURITY DEFINER to INVOKER so
+     * imported views/routines don't fail on a missing or mismatched MySQL user.
+     */
+    private function stripDefiner(string $sql): string
+    {
+        $sql = (string) preg_replace('/DEFINER=[^\s]+@[^\s]+\s/', '', $sql);
+
+        return str_replace('SQL SECURITY DEFINER', 'SQL SECURITY INVOKER', $sql);
+    }
+
+    /**
+     * Cap a single INSERT well under the server's max_allowed_packet so a wide
+     * row never produces a packet the server rejects on import.
+     */
+    private function safeInsertSize(): int
+    {
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
+        $row    = $this->db->get_row("SHOW VARIABLES LIKE 'max_allowed_packet'", ARRAY_A);
+        $packet = is_array($row) ? (int) ($row['Value'] ?? 0) : 0;
+        if ($packet <= 0) {
+            return self::DEFAULT_MAX_INSERT_BYTES;
+        }
+
+        return max(65_536, min(self::DEFAULT_MAX_INSERT_BYTES, (int) ($packet * 0.9)));
     }
 
     /**
@@ -115,7 +198,7 @@ final class Dumper
                     $insert .= ',' . $values;
                 }
 
-                if (strlen($insert) >= self::MAX_INSERT_BYTES) {
+                if (strlen($insert) >= $this->maxInsertBytes) {
                     $this->write($handle, $insert . ";\n");
                     $insert  = '';
                     $started = false;
