@@ -63,6 +63,12 @@ add_action('plugins_loaded', static function (): void {
     }, 0);
 }, 10);
 
+// WP-CLI: `wp migrator export` / `import`. Registered early so it is available
+// even on a site that is otherwise mid-migration.
+if (defined('WP_CLI') && WP_CLI) {
+    \WP_CLI::add_command('migrator', Cli\Command::class);
+}
+
 register_activation_hook(PLUGIN_FILE, static function (): void {
     require_once PLUGIN_DIR . '/autoload.php';
     Plugin::instance()->container()->get(Support\Workspace::class)->ensure();
