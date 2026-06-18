@@ -6,6 +6,7 @@ namespace Migrator\Cli;
 
 use Migrator\Engine\Db\Dumper;
 use Migrator\Engine\Export\Exporter;
+use Migrator\Engine\Import\Importer;
 use Migrator\Support\Workspace;
 
 defined('ABSPATH') || exit;
@@ -53,6 +54,61 @@ final class Command
             $result['files'],
             $result['path'],
             size_format($result['bytes']),
+        ));
+    }
+
+    /**
+     * Import an archive onto this site (database + files), rewriting the source
+     * site's URLs and paths to this site's.
+     *
+     * ## OPTIONS
+     *
+     * <file>
+     * : Path to the .migrator archive to restore.
+     *
+     * [--skip-files]
+     * : Import the database only; do not extract wp-content files.
+     *
+     * [--yes]
+     * : Skip the confirmation prompt.
+     *
+     * ## EXAMPLES
+     *
+     *     wp migrator import /tmp/my-site.migrator
+     *     wp migrator import /tmp/db-only.migrator --skip-files --yes
+     *
+     * @param array<int, string>    $args       Positional args: the archive path.
+     * @param array<string, string> $assoc_args Flags.
+     */
+    public function import(array $args, array $assoc_args): void
+    {
+        global $wpdb;
+
+        $archive = $args[0] ?? '';
+        if ('' === $archive || ! is_readable($archive)) {
+            \WP_CLI::error('Archive not found or not readable: ' . $archive);
+        }
+
+        \WP_CLI::confirm('This overwrites the current database. Continue?', $assoc_args);
+
+        $workspace = new Workspace();
+        $workspace->ensure();
+        $importer = new Importer($workspace, $wpdb);
+
+        \WP_CLI::log('Importing archive…');
+        $result = $importer->import(
+            $archive,
+            ! isset($assoc_args['skip-files']),
+            static function (string $message): void {
+                \WP_CLI::log('  ' . $message);
+            }
+        );
+
+        \WP_CLI::success(sprintf(
+            'Imported %d SQL statements, rewrote %d rows, extracted %d files.',
+            $result['statements'],
+            $result['replaced'],
+            $result['files'],
         ));
     }
 }
