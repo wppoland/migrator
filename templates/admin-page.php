@@ -28,27 +28,34 @@ defined('ABSPATH') || exit;
 			<details class="migrator-options">
 				<summary><?php esc_html_e('What to leave out (optional)', 'migrator'); ?></summary>
 				<?php
-				$migrator_opts = [
-					'no_media'            => __('Media library (uploads)', 'migrator'),
-					'no_themes'           => __('All themes', 'migrator'),
-					'no_inactive_themes'  => __('Inactive themes (keep active only)', 'migrator'),
-					'no_plugins'          => __('All plugins', 'migrator'),
-					'no_inactive_plugins' => __('Inactive plugins (keep active only)', 'migrator'),
-					'no_muplugins'        => __('Must-use plugins', 'migrator'),
-					'no_cache'            => __('Cache files', 'migrator'),
-					'no_spam_comments'    => __('Spam comments', 'migrator'),
-					'no_post_revisions'   => __('Post revisions', 'migrator'),
-					'no_transients'       => __('Transients', 'migrator'),
-					'no_sessions'         => __('WooCommerce sessions', 'migrator'),
-					'no_action_scheduler' => __('Action Scheduler tables', 'migrator'),
-					'no_database'         => __('Database (files-only backup)', 'migrator'),
+				$migrator_groups = [
+					__('Database', 'migrator') => [
+						'no_spam_comments'    => __('Spam comments', 'migrator'),
+						'no_post_revisions'   => __('Post revisions', 'migrator'),
+						'no_transients'       => __('Transients', 'migrator'),
+						'no_sessions'         => __('WooCommerce sessions', 'migrator'),
+						'no_action_scheduler' => __('Action Scheduler tables', 'migrator'),
+						'no_database'         => __('Database (files-only backup)', 'migrator'),
+					],
+					__('Files', 'migrator') => [
+						'no_media'            => __('Media library (uploads)', 'migrator'),
+						'no_themes'           => __('All themes', 'migrator'),
+						'no_inactive_themes'  => __('Inactive themes (keep active only)', 'migrator'),
+						'no_plugins'          => __('All plugins', 'migrator'),
+						'no_inactive_plugins' => __('Inactive plugins (keep active only)', 'migrator'),
+						'no_muplugins'        => __('Must-use plugins', 'migrator'),
+						'no_cache'            => __('Cache files', 'migrator'),
+					],
 				];
-				foreach ($migrator_opts as $migrator_key => $migrator_label) :
+				foreach ($migrator_groups as $migrator_group_label => $migrator_opts) :
 					?>
-					<label class="migrator-options__opt">
-						<input type="checkbox" class="migrator-export-opt" value="<?php echo esc_attr($migrator_key); ?>">
-						<?php echo esc_html($migrator_label); ?>
-					</label>
+					<p class="migrator-options__group"><?php echo esc_html($migrator_group_label); ?></p>
+					<?php foreach ($migrator_opts as $migrator_key => $migrator_label) : ?>
+						<label class="migrator-options__opt">
+							<input type="checkbox" class="migrator-export-opt" value="<?php echo esc_attr($migrator_key); ?>">
+							<?php echo esc_html($migrator_label); ?>
+						</label>
+					<?php endforeach; ?>
 				<?php endforeach; ?>
 			</details>
 
@@ -120,4 +127,36 @@ defined('ABSPATH') || exit;
 			</p>
 		</section>
 	</div>
+
+	<?php
+	/**
+	 * Filters the URL the "Upgrade" call to action points at.
+	 *
+	 * @param string $url Default Migrator Pro page.
+	 */
+	$migrator_pro_url = (string) apply_filters('migrator/pro_url', 'https://plogins.com/migrator-pro/');
+	?>
+	<section class="migrator-pro-cta" aria-labelledby="migrator-pro-cta-heading">
+		<div class="migrator-pro-cta__main">
+			<p class="migrator-pro-cta__eyebrow"><?php esc_html_e('Migrator Pro', 'migrator'); ?></p>
+			<h2 id="migrator-pro-cta-heading" class="migrator-pro-cta__heading">
+				<?php esc_html_e('Put your backups on autopilot and move sites between servers', 'migrator'); ?>
+			</h2>
+			<p class="migrator-pro-cta__lead">
+				<?php esc_html_e('The free plugin backs up, restores and migrates your site by hand. Pro adds the things agencies and busy site owners ask for, all in one licence:', 'migrator'); ?>
+			</p>
+			<ul class="migrator-pro-cta__list">
+				<li><?php esc_html_e('Scheduled automatic backups, kept on a retention you choose', 'migrator'); ?></li>
+				<li><?php esc_html_e('Off-site copies to a mounted drive, NAS or cloud storage', 'migrator'); ?></li>
+				<li><?php esc_html_e('Direct server-to-server migration, with no manual download', 'migrator'); ?></li>
+				<li><?php esc_html_e('On the way: no size limit, multisite and encrypted backups', 'migrator'); ?></li>
+			</ul>
+		</div>
+		<div class="migrator-pro-cta__action">
+			<a class="button button-primary button-hero" href="<?php echo esc_url($migrator_pro_url); ?>" target="_blank" rel="noopener noreferrer">
+				<?php esc_html_e('Get Migrator Pro', 'migrator'); ?>
+			</a>
+			<p class="migrator-pro-cta__note"><?php esc_html_e('One licence covers every Pro feature.', 'migrator'); ?></p>
+		</div>
+	</section>
 </div>
