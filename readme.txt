@@ -1,5 +1,5 @@
 === Migrator - Backup, Restore and Migrate Your Site ===
-Contributors: wppoland
+Contributors: motylanogha
 Tags: backup, migration, clone, restore, wp-cli
 Requires at least: 6.5
 Tested up to: 6.7
@@ -9,6 +9,8 @@ License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Back up your whole site to one file, then restore it here or on a new host. URLs and paths are fixed up for you. Runs on your own server.
+
+Plugin home: https://plogins.com/migrator/
 
 == Description ==
 
