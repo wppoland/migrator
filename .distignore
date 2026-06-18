@@ -1,0 +1,25 @@
+# Files excluded from the wp.org build. Migrator has no runtime Composer
+# dependencies (vendor/ holds only dev tooling), so it is NOT shipped — the
+# bundled PSR-4 fallback autoloader in autoload.php loads src/ directly.
+/.git
+/.github
+/.gitignore
+/.distignore
+/.wp-env.json
+/.wp-env.override.json
+/vendor
+/node_modules
+/tests
+/scripts
+/docs
+/composer.json
+/composer.lock
+/phpcs.xml.dist
+/phpstan.neon.dist
+/phpstan-baseline.neon
+/README.md
+/.DS_Store
+
+.DS_Store
+/.wordpress-org
+/test-results

@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+# The reusable workflow's release job creates a GitHub release; grant it here
+# (a reusable workflow cannot exceed the caller's GITHUB_TOKEN permissions).
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: wppoland/workflows/.github/workflows/_release-free.yml@v1
+    with:
+      slug: migrator
+      wporg-slug: migrator
+      has-js: false
+    secrets:
+      WPORG_SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+      WPORG_SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
