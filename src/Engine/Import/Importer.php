@@ -79,9 +79,21 @@ final class Importer
         }
 
         // Multisite has its own table layout and URL handling; importing across a
-        // single-site/multisite boundary silently corrupts. Refuse for now.
-        if ((bool) $manifest->get('multisite') || is_multisite()) {
-            throw new \RuntimeException('Migrator: multisite backups are not supported yet. This archive or this site is a multisite network.');
+        // single-site/multisite boundary silently corrupts. A companion add-on can
+        // declare support for a matched network-to-network restore; otherwise refuse.
+        $archiveMultisite = (bool) $manifest->get('multisite');
+        if ($archiveMultisite || is_multisite()) {
+            /**
+             * Filters whether this multisite restore is supported by a handler.
+             *
+             * @param bool $supported       Default false (core refuses multisite).
+             * @param bool $archiveMultisite Whether the archive is a network backup.
+             * @param bool $siteMultisite    Whether this site is a network.
+             */
+            $supported = (bool) apply_filters('migrator/multisite_supported', false, $archiveMultisite, is_multisite());
+            if (! $supported) {
+                throw new \RuntimeException('Migrator: multisite backups need the Migrator Pro add-on for a network-to-network restore. This archive or this site is a multisite network.');
+            }
         }
 
         // Capture the target's identity BEFORE the DB import overwrites it.
@@ -123,6 +135,20 @@ final class Importer
                         $tablesRepl = $result['tables'];
                         $log(sprintf('Rewrote URLs/paths in %d rows across %d tables.', $replaced, $tablesRepl));
                     }
+
+                    /**
+                     * Fires after the database is imported and the standard
+                     * URL/path rewrite has run, while the safety backup is still
+                     * in place. A handler that throws triggers the rollback. Used
+                     * by the Pro add-on to fix up multisite network tables
+                     * (wp_blogs / wp_site) that hold bare host names the URL
+                     * rewrite cannot reach.
+                     *
+                     * @param array{source: array, target: array} $context Source and target identities.
+                     * @param Manifest                            $manifest The archive manifest.
+                     * @param \wpdb                               $db       The database handle.
+                     */
+                    do_action('migrator/after_database_import', ['source' => $source, 'target' => $target], $manifest, $this->db);
                 } catch (\Throwable $e) {
                     $log('Import failed, restoring the previous database…');
                     $this->restoreDatabase($rollback);
