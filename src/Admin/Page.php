@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Migrator\Admin;
+
+use Migrator\Contract\HasHooks;
+
+defined('ABSPATH') || exit;
+
+/**
+ * Registers the Migrator admin screen and loads its assets only on that screen.
+ */
+final class Page implements HasHooks
+{
+    public const SLUG = 'migrator';
+
+    private string $hookSuffix = '';
+
+    public function registerHooks(): void
+    {
+        add_action('admin_menu', [$this, 'registerMenu']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue']);
+    }
+
+    public function registerMenu(): void
+    {
+        $hook = add_menu_page(
+            __('Migrator', 'migrator'),
+            __('Migrator', 'migrator'),
+            'manage_options',
+            self::SLUG,
+            [$this, 'render'],
+            'dashicons-migrate',
+            81,
+        );
+
+        $this->hookSuffix = is_string($hook) ? $hook : '';
+    }
+
+    public function render(): void
+    {
+        require \Migrator\PLUGIN_DIR . '/templates/admin-page.php';
+    }
+
+    public function enqueue(string $hook): void
+    {
+        if ($hook !== $this->hookSuffix) {
+            return;
+        }
+
+        $version = (string) \Migrator\VERSION;
+        $file    = \Migrator\PLUGIN_FILE;
+
+        wp_enqueue_style('migrator-admin', plugins_url('assets/admin.css', $file), [], $version);
+        wp_enqueue_script('migrator-admin', plugins_url('assets/admin.js', $file), [], $version, true);
+        wp_localize_script('migrator-admin', 'migratorData', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('migrator'),
+            'i18n'    => [
+                'preparing' => __('Preparing…', 'migrator'),
+                'archiving' => __('Archiving files…', 'migrator'),
+                'done'      => __('Backup ready.', 'migrator'),
+                'failed'    => __('Export failed.', 'migrator'),
+            ],
+        ]);
+    }
+}

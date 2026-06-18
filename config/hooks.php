@@ -14,6 +14,6 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 return [
-    // Hookable services are appended here as features land
-    // (admin page, AJAX controller, WP-CLI command).
+    \Migrator\Admin\Page::class,
+    \Migrator\Admin\Ajax::class,
 ];
