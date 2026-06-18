@@ -1,16 +1,7 @@
 # Migrator
 
-Backup, restore and migrate WordPress — one archive, self-hosted, no third-party service.
-
-- **Plugin home:** https://plogins.com/migrator/
+- **Plugin page:** https://plogins.com/migrator/
+- **Documentation:** https://plogins.com/migrator/docs/
 - **Author:** [WPPoland.com](https://wppoland.com)
-- **Contributor (WordPress.org):** motylanogha
+- **WordPress.org contributor:** motylanogha
 - **Source:** https://github.com/wppoland/migrator
-
-## Development
-
-```bash
-composer install
-composer cs
-composer analyse
-```

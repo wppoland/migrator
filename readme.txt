@@ -10,8 +10,6 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Back up your whole site to one file, then restore it here or on a new host. URLs and paths are fixed up for you. Runs on your own server.
 
-Plugin home: https://plogins.com/migrator/
-
 == Description ==
 
 Migrator packs your database and everything in `wp-content` into a single file you can download, keep as a backup, and restore — on the same site or on a brand-new install somewhere else. When you restore onto a different address, Migrator rewrites the old URLs and file paths to the new ones for you, so the site just works.
@@ -53,6 +51,15 @@ For large sites where a browser request would time out, every job also runs from
 3. Open **Migrator** in the admin menu to create a backup, or use `wp migrator export` from the command line.
 
 == Frequently Asked Questions ==
+
+= Documentation and links =
+
+* **Documentation** - https://plogins.com/migrator/docs/
+* **Plugin page** - https://plogins.com/migrator/
+* **Source code** - https://github.com/wppoland/migrator
+* **Bug reports and feature requests** - https://github.com/wppoland/migrator/issues
+* **Discussions and questions** - https://github.com/wppoland/migrator/discussions
+
 
 = Does restoring delete what is already on the destination? =
 
