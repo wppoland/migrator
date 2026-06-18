@@ -19,7 +19,10 @@ defined('ABSPATH') || exit;
  */
 final class Dumper
 {
-    private const DEFAULT_MAX_INSERT_BYTES = 5_242_880; // ~5 MiB.
+    // 1 MiB: small enough to import on shared hosts whose max_allowed_packet is
+    // far below the export host's. The export can't know the import server's
+    // limit, so it stays conservative.
+    private const DEFAULT_MAX_INSERT_BYTES = 1_048_576;
 
     private int $maxInsertBytes;
 

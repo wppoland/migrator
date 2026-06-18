@@ -10,97 +10,179 @@ defined('ABSPATH') || exit;
  * Executes a SQL dump statement by statement.
  *
  * Splitting on ";" naively would break on any value that contains a semicolon,
- * so this tokenises the SQL: it tracks whether it is inside a single-quoted
- * string (honouring backslash escapes) and only treats a ";" outside a string
- * as a statement boundary. That makes it safe for arbitrary serialized/binary
- * data in INSERTs.
+ * so this tokenises the SQL with a small state machine: it tracks whether it is
+ * inside a single-quoted string (honouring backslash escapes) and only treats a
+ * ";" outside a string as a statement boundary. That makes it safe for arbitrary
+ * serialized/binary data in INSERTs.
+ *
+ * It streams: {@see runFile()} reads the dump in chunks and executes each
+ * statement as it completes, so even a multi-gigabyte dump never has to be held
+ * in memory — only the current statement is buffered.
  */
 final class SqlExecutor
 {
+    private const READ_CHUNK = 1_048_576; // 1 MiB.
+
+    private string $buffer = '';
+
+    private bool $inString = false;
+
+    private bool $escapeNext = false;
+
     public function __construct(private \wpdb $db)
     {
     }
 
     /**
-     * Run every statement in $sql. Returns the number executed.
+     * Execute every statement in a SQL file, streaming it. Returns the count.
      */
-    public function run(string $sql): int
+    public function runFile(string $path): int
     {
-        $count = 0;
-        foreach ($this->statements($sql) as $statement) {
-            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
-            $result = $this->db->query($statement);
-            if (false === $result) {
-                throw new \RuntimeException(esc_html(sprintf(
-                    'Migrator: SQL import failed near: %s',
-                    substr($statement, 0, 120)
-                )));
-            }
-            $count++;
+        $handle = fopen($path, 'rb');
+        if (false === $handle) {
+            throw new \RuntimeException(esc_html('Migrator: cannot read SQL file: ' . $path));
+        }
+
+        try {
+            $count = $this->runStream($handle);
+        } finally {
+            fclose($handle);
         }
 
         return $count;
     }
 
     /**
-     * Split a SQL string into individual statements.
-     *
-     * @return \Generator<string>
+     * Execute every statement in an in-memory SQL string. Returns the count.
      */
-    public function statements(string $sql): \Generator
+    public function run(string $sql): int
     {
-        $length = strlen($sql);
-        $buffer = '';
-        $inStr  = false;
+        $this->reset();
+        $count = $this->consume($sql);
+
+        return $count + $this->flush();
+    }
+
+    /**
+     * @param resource $handle
+     */
+    private function runStream($handle): int
+    {
+        $this->reset();
+        $count = 0;
+        while (! feof($handle)) {
+            $chunk = fread($handle, self::READ_CHUNK);
+            if (false === $chunk || '' === $chunk) {
+                break;
+            }
+            $count += $this->consume($chunk);
+        }
+
+        return $count + $this->flush();
+    }
+
+    /**
+     * Feed a chunk through the tokeniser, executing each statement it completes.
+     * State persists between calls so a statement may span chunk boundaries.
+     */
+    private function consume(string $chunk): int
+    {
+        $count  = 0;
+        $length = strlen($chunk);
 
         for ($i = 0; $i < $length; $i++) {
-            $char    = $sql[$i];
-            $buffer .= $char;
+            $char          = $chunk[$i];
+            $this->buffer .= $char;
 
-            if ($inStr) {
-                if ('\\' === $char && $i + 1 < $length) {
-                    // Escaped character — consume the next byte verbatim.
-                    $buffer .= $sql[$i + 1];
-                    $i++;
+            if ($this->escapeNext) {
+                $this->escapeNext = false;
+                continue;
+            }
+
+            if ($this->inString) {
+                if ('\\' === $char) {
+                    $this->escapeNext = true;
                 } elseif ("'" === $char) {
-                    $inStr = false;
+                    $this->inString = false;
                 }
                 continue;
             }
 
             if ("'" === $char) {
-                $inStr = true;
+                $this->inString = true;
             } elseif (';' === $char) {
-                $statement = $this->clean($buffer);
-                if ('' !== $statement) {
-                    yield $statement;
+                if ($this->execute($this->buffer)) {
+                    $count++;
                 }
-                $buffer = '';
+                $this->buffer = '';
             }
         }
 
-        $statement = $this->clean($buffer);
-        if ('' !== $statement) {
-            yield $statement;
-        }
+        return $count;
+    }
+
+    private function flush(): int
+    {
+        $executed = $this->execute($this->buffer) ? 1 : 0;
+        $this->reset();
+
+        return $executed;
     }
 
     /**
-     * Trim a raw buffer into an executable statement, dropping the trailing
-     * semicolon, blank lines and whole-line `--` comments.
+     * Clean and run one statement. Returns false for empty/comment-only buffers.
+     */
+    private function execute(string $buffer): bool
+    {
+        $statement = $this->clean($buffer);
+        if ('' === $statement) {
+            return false;
+        }
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
+        $result = $this->db->query($statement);
+        if (false === $result) {
+            throw new \RuntimeException(esc_html(sprintf(
+                'Migrator: SQL import failed near: %s',
+                substr(ltrim($statement), 0, 120)
+            )));
+        }
+
+        return true;
+    }
+
+    /**
+     * Trim a statement: drop the trailing semicolon and surrounding whitespace,
+     * and discard buffers that are only whitespace or `--` comment lines. The
+     * statement body is otherwise left verbatim (MySQL parses any inline `--`
+     * comment itself), so a data line that happens to start with "-- " inside a
+     * quoted value is never mangled.
      */
     private function clean(string $buffer): string
     {
-        $lines = explode("\n", $buffer);
-        $kept  = [];
-        foreach ($lines as $line) {
-            $trimmed = ltrim($line);
-            if ('' === $trimmed || str_starts_with($trimmed, '-- ')) {
-                continue;
-            }
-            $kept[] = $line;
+        $statement = trim(rtrim(trim($buffer), ';'));
+        if ('' === $statement) {
+            return '';
         }
 
-        return rtrim(trim(implode("\n", $kept)), ';');
+        if (str_starts_with($statement, '-- ')) {
+            foreach (explode("\n", $statement) as $line) {
+                $line = ltrim($line);
+                if ('' !== $line && ! str_starts_with($line, '-- ')) {
+                    return $statement; // Has real SQL beyond the comment lines.
+                }
+            }
+
+            return ''; // Comment-only buffer (e.g. the dump header).
+        }
+
+        return $statement;
+    }
+
+    private function reset(): void
+    {
+        $this->buffer     = '';
+        $this->inString   = false;
+        $this->escapeNext = false;
     }
 }

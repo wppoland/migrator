@@ -178,7 +178,7 @@ final class Importer
             return;
         }
         try {
-            (new SqlExecutor($this->db))->run((string) file_get_contents($path));
+            (new SqlExecutor($this->db))->runFile($path);
         } catch (\Throwable $e) {
             // Nothing more we can safely do; the rollback file is kept for manual recovery.
             return;
@@ -198,10 +198,11 @@ final class Importer
         });
         fclose($handle);
 
-        $sql = (string) file_get_contents($tmp);
+        // Stream the temp file statement-by-statement — never load the whole
+        // dump into memory.
+        $count = (new SqlExecutor($this->db))->runFile($tmp);
         wp_delete_file($tmp);
 
-        $count = (new SqlExecutor($this->db))->run($sql);
         $log(sprintf('Imported database (%d statements).', $count));
 
         return $count;

@@ -40,20 +40,23 @@ final class SearchReplace
 
         foreach ($tables as $table) {
             $table = (string) $table;
-            $pk    = $this->primaryKey($table);
-            if (null === $pk) {
-                $skipped[] = $table;
+            $pks   = $this->primaryKeys($table);
+            if ([] === $pks) {
+                $skipped[] = $table; // No primary key: cannot target rows safely.
                 continue;
             }
 
-            $safe   = '`' . str_replace('`', '``', $table) . '`';
-            $pkSafe = '`' . str_replace('`', '``', $pk) . '`';
+            $safe    = '`' . str_replace('`', '``', $table) . '`';
+            $orderBy = implode(', ', array_map(
+                static fn (string $c): string => '`' . str_replace('`', '``', $c) . '`',
+                $pks
+            ));
             $offset = 0;
 
             do {
                 // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
                 $rows = $this->db->get_results(
-                    $this->db->prepare("SELECT * FROM {$safe} ORDER BY {$pkSafe} LIMIT %d OFFSET %d", $this->batchSize, $offset),
+                    $this->db->prepare("SELECT * FROM {$safe} ORDER BY {$orderBy} LIMIT %d OFFSET %d", $this->batchSize, $offset),
                     ARRAY_A
                 );
                 if (! is_array($rows) || [] === $rows) {
@@ -65,7 +68,7 @@ final class SearchReplace
                     /** @var array<string, scalar|null> $row */
                     $update = [];
                     foreach ($row as $column => $value) {
-                        if (! is_string($value) || $column === $pk) {
+                        if (! is_string($value) || in_array($column, $pks, true)) {
                             continue;
                         }
                         $before = $this->replacer->replacements();
@@ -76,7 +79,11 @@ final class SearchReplace
                     }
 
                     if ([] !== $update) {
-                        $this->db->update($table, $update, [ $pk => $row[$pk] ]);
+                        $where = [];
+                        foreach ($pks as $pk) {
+                            $where[$pk] = $row[$pk];
+                        }
+                        $this->db->update($table, $update, $where);
                         $changes++;
                     }
                 }
@@ -93,17 +100,29 @@ final class SearchReplace
         ];
     }
 
-    private function primaryKey(string $table): ?string
+    /**
+     * All columns of a table's PRIMARY key (one for a simple key, several for a
+     * composite key). Empty if the table has no primary key.
+     *
+     * @return string[]
+     */
+    private function primaryKeys(string $table): array
     {
         $safe = '`' . str_replace('`', '``', $table) . '`';
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
         $keys = $this->db->get_results("SHOW KEYS FROM {$safe} WHERE Key_name = 'PRIMARY'", ARRAY_A);
-        if (! is_array($keys) || count($keys) !== 1) {
-            return null; // No PK, or composite — skip to stay safe.
+        if (! is_array($keys)) {
+            return [];
         }
 
-        $column = $keys[0]['Column_name'] ?? null;
+        $columns = [];
+        foreach ($keys as $key) {
+            $column = $key['Column_name'] ?? null;
+            if (is_string($column)) {
+                $columns[] = $column;
+            }
+        }
 
-        return is_string($column) ? $column : null;
+        return $columns;
     }
 }
