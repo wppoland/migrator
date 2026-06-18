@@ -16,7 +16,7 @@ defined('ABSPATH') || exit;
  *
  * Rows are read in bounded batches (never the whole table at once) and written
  * straight to a stream, so a large table never has to sit in memory. Values are
- * dumped verbatim — search-and-replace happens at import time so one archive can
+ * dumped verbatim, search-and-replace happens at import time so one archive can
  * be restored onto any domain.
  *
  * The SQL is plain mysqldump-style: DROP + CREATE per table, then batched

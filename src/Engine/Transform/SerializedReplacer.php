@@ -12,8 +12,8 @@ defined('ABSPATH') || exit;
  * A naive `str_replace` on a database dump corrupts serialized values: changing
  * "https://old" to "https://new.example" leaves the byte-length prefix
  * (`s:10:"https://old"`) pointing at the wrong length, and WordPress then fails
- * to unserialize the value. This walks the *decoded* structure instead —
- * unserialize, replace inside, re-serialize — so lengths are always recomputed
+ * to unserialize the value. This walks the *decoded* structure instead -
+ * unserialize, replace inside, re-serialize, so lengths are always recomputed
  * correctly. It never rewrites raw serialized strings with a regex.
  *
  * Safety rules:
@@ -23,7 +23,7 @@ defined('ABSPATH') || exit;
  *    risk the data.
  *  - JSON that decodes to an array/object is recursed (WooCommerce stores
  *    serialized strings inside JSON meta), but only re-encoded when something
- *    inside actually changed — untouched JSON is returned byte-for-byte.
+ *    inside actually changed, untouched JSON is returned byte-for-byte.
  *
  * Usage:
  *   $r   = new SerializedReplacer($fromUrl, $toUrl);          // or arrays
@@ -82,7 +82,7 @@ final class SerializedReplacer
     {
         // Restrict unserialize to stdClass: arrays and plain objects round-trip,
         // but a crafted archive cannot instantiate arbitrary classes (which could
-        // run __wakeup/__destruct — PHP object injection). Unknown classes decode
+        // run __wakeup/__destruct, PHP object injection). Unknown classes decode
         // to __PHP_Incomplete_Class and are left untouched below.
         if (is_string($data) && '' !== $data && $this->isSerialized($data) && false !== ($un = @unserialize($data, ['allowed_classes' => ['stdClass']]))) {
             if (! $this->hasIncompleteClass($un)) {

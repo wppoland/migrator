@@ -22,7 +22,7 @@ defined('ABSPATH') || exit;
  *
  * It streams: {@see runFile()} reads the dump in chunks and executes each
  * statement as it completes, so even a multi-gigabyte dump never has to be held
- * in memory — only the current statement is buffered.
+ * in memory, only the current statement is buffered.
  */
 final class SqlExecutor
 {

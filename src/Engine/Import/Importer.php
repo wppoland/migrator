@@ -68,7 +68,7 @@ final class Importer
 
         // The dump uses the source's literal table names. If this site's prefix
         // differs, the imported tables would not be the ones WordPress reads,
-        // leaving a silently broken site — so refuse rather than corrupt.
+        // leaving a silently broken site, so refuse rather than corrupt.
         $sourcePrefix = (string) $manifest->get('tablePrefix');
         if ('' !== $sourcePrefix && $sourcePrefix !== $this->db->prefix) {
             throw new \RuntimeException(esc_html(sprintf(
@@ -124,7 +124,7 @@ final class Importer
                         $log(sprintf('Rewrote URLs/paths in %d rows across %d tables.', $replaced, $tablesRepl));
                     }
                 } catch (\Throwable $e) {
-                    $log('Import failed — restoring the previous database…');
+                    $log('Import failed, restoring the previous database…');
                     $this->restoreDatabase($rollback);
                     $reader->close();
                     throw new \RuntimeException(esc_html(
@@ -205,7 +205,7 @@ final class Importer
         });
         fclose($handle);
 
-        // Stream the temp file statement-by-statement — never load the whole
+        // Stream the temp file statement-by-statement, never load the whole
         // dump into memory.
         $count = (new SqlExecutor($this->db))->runFile($tmp);
         wp_delete_file($tmp);

@@ -9,8 +9,8 @@ defined('ABSPATH') || exit;
 /**
  * Owns the private working directory where archives and in-progress job state
  * live. It sits under wp-content (survives plugin updates, writable on most
- * hosts) and is locked down so the archives — which contain a full copy of the
- * site, including secrets — are never web-accessible.
+ * hosts) and is locked down so the archives, which contain a full copy of the
+ * site, including secrets, are never web-accessible.
  *
  * Files are never served by URL: downloads go through an authenticated admin
  * handler that streams them, so the directory stays deny-all.

@@ -4,7 +4,7 @@
  * needed):  php tests/serialized-replace.php
  *
  * The decisive check for serialized inputs is that the OUTPUT re-unserializes to
- * the correctly-replaced structure — that catches any byte-length mistake, which
+ * the correctly-replaced structure, that catches any byte-length mistake, which
  * is the whole point of doing this safely.
  *
  * @package Migrator
@@ -101,7 +101,7 @@ $mixed = 'a:2:{s:4:"safe";s:19:"https://old.example";s:3:"obj";O:7:"Unknown":0:{
 [$out, $n] = run($mixed);
 ok('array containing unknown-class object left untouched', $out === $mixed && $n === 0);
 
-// 8. JSON value containing a URL (WooCommerce-style meta) — plain JSON.
+// 8. JSON value containing a URL (WooCommerce-style meta), plain JSON.
 $json = '{"shipping":{"url":"https://old.example/x"},"id":5}';
 [$out, $n] = run($json);
 $jd = json_decode($out, true);

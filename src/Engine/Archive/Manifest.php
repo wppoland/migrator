@@ -12,7 +12,7 @@ defined('ABSPATH') || exit;
  * to validate the archive and to know what to search-and-replace (the source
  * URLs and paths) when the archive lands on a different site.
  *
- * Kept deliberately small and explicit — no nested plugin state, just the facts
+ * Kept deliberately small and explicit, no nested plugin state, just the facts
  * an import needs to be safe.
  */
 final class Manifest

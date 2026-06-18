@@ -157,7 +157,7 @@ final class Reader
         $actual = hash_final($context);
         if (! hash_equals($this->currentCrc, $actual)) {
             throw new \RuntimeException(esc_html(sprintf(
-                'Migrator: checksum mismatch — the archive is corrupt or truncated (expected %s, got %s).',
+                'Migrator: checksum mismatch, the archive is corrupt or truncated (expected %s, got %s).',
                 $this->currentCrc,
                 $actual
             )));

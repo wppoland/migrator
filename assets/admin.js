@@ -1,4 +1,4 @@
-/* Migrator admin — resumable export driver. Vanilla JS, no dependencies. */
+/* Migrator admin, resumable export driver. Vanilla JS, no dependencies. */
 ( function () {
 	'use strict';
 

@@ -49,7 +49,7 @@ if (version_compare(PHP_VERSION, MIN_PHP_VERSION, '<')) {
 
 require_once __DIR__ . '/autoload.php';
 
-// Declare WooCommerce HPOS compatibility — only fires when WooCommerce is
+// Declare WooCommerce HPOS compatibility, only fires when WooCommerce is
 // present. Migrator backs up custom order tables, so it is HPOS-safe.
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {

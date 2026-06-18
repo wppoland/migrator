@@ -13,7 +13,7 @@ defined('ABSPATH') || exit;
 		<?php esc_html_e('Migrator', 'migrator'); ?>
 	</h1>
 	<p class="migrator__lead">
-		<?php esc_html_e('Back up your site or move it to a new host — one file, no technical setup.', 'migrator'); ?>
+		<?php esc_html_e('Back up your site or move it to a new host, one file, no technical setup.', 'migrator'); ?>
 	</p>
 
 	<div class="migrator__cards">
@@ -83,7 +83,7 @@ defined('ABSPATH') || exit;
 				<?php esc_html_e('Restore a backup', 'migrator'); ?>
 			</h2>
 			<p class="migrator-card__desc">
-				<?php esc_html_e('Drop a Migrator archive here to restore it. This overwrites the current database (and files) with the archive — keep a backup of anything you want to keep.', 'migrator'); ?>
+				<?php esc_html_e('Drop a Migrator archive here to restore it. This overwrites the current database (and files) with the archive, keep a backup of anything you want to keep.', 'migrator'); ?>
 			</p>
 
 			<div class="migrator-drop" id="migrator-drop">
@@ -115,7 +115,7 @@ defined('ABSPATH') || exit;
 			</div>
 
 			<p class="migrator-card__desc migrator-card__cli">
-				<?php esc_html_e('Large site? Restore from the command line — it has no time limit:', 'migrator'); ?>
+				<?php esc_html_e('Large site? Restore from the command line, it has no time limit:', 'migrator'); ?>
 				<br><code>wp migrator import &lt;file&gt;.migrator</code>
 			</p>
 		</section>

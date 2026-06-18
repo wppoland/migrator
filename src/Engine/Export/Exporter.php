@@ -63,7 +63,7 @@ final class Exporter
         $writer->addString(Manifest::NAME, $manifest->toJson(), Entry::TYPE_MANIFEST);
         $log(sprintf('Manifest written (%d tables).', count($tables)));
 
-        // 2. Database dump — generated to a temp file, then streamed into the
+        // 2. Database dump, generated to a temp file, then streamed into the
         //    archive (so the entry size is known without buffering it in memory).
         if (! $options->excludeDatabase()) {
             $sqlTmp = $this->workspace->path('tmp-' . wp_generate_password(8, false) . '.sql');

@@ -5,7 +5,7 @@
  *   php tests/archive-roundtrip.php
  *
  * Writes a mix of in-memory and on-disk entries, reads them back, and asserts
- * the paths, sizes and bytes survive intact — including a large entry that the
+ * the paths, sizes and bytes survive intact, including a large entry that the
  * writer streams in 5 MiB chunks and a resumed extraction.
  *
  * @package Migrator
@@ -57,7 +57,7 @@ file_put_contents($bigSource, $big);
 
 // A small file with awkward bytes (nulls, UTF-8, the 4-byte end marker shape).
 $smallSource = $tmp . '/small.txt';
-$small       = "héllo\x00\x00\x00\x00world — ąęś\n";
+$small       = "héllo\x00\x00\x00\x00world, ąęś\n";
 file_put_contents($smallSource, $small);
 
 $manifestJson = '{"format":"migrator","siteUrl":"https://old.example"}';
