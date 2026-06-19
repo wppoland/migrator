@@ -36,6 +36,13 @@ final class ExportPipeline
 {
     public const JOB_OPTION = 'migrator_export_job';
 
+    /**
+     * Files appended per step. Caps a single request even when the server is fast
+     * enough to do far more within the time budget, so the progress bar advances
+     * in visible increments rather than one jump from 0 to 100.
+     */
+    private const FILES_PER_STEP = 1500;
+
     public function __construct(
         private Workspace $workspace,
         private Dumper $dumper,
@@ -152,7 +159,11 @@ final class ExportPipeline
         $list = fopen((string) $job['list'], 'rb');
         if (false !== $list) {
             fseek($list, $offset);
-            while ($index < $total && ! $budget->expired()) {
+            $start = $index;
+            // Stop on the time budget (slow hosts) or after a batch of files
+            // (fast hosts), whichever comes first, so the browser gets frequent
+            // progress updates instead of one long step that looks frozen.
+            while ($index < $total && ! $budget->expired() && ($index - $start) < self::FILES_PER_STEP) {
                 $line = fgets($list);
                 if (false === $line) {
                     break;
