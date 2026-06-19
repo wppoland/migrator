@@ -92,6 +92,14 @@
 		document.querySelectorAll( '.migrator-export-opt:checked' ).forEach( function ( cb ) {
 			opts[ 'options[' + cb.value + ']' ] = '1';
 		} );
+		var ti = 0;
+		document.querySelectorAll( '.migrator-export-table:checked' ).forEach( function ( cb ) {
+			opts[ 'options[exclude_tables][' + ti++ + ']' ] = cb.value;
+		} );
+		var pi = 0;
+		document.querySelectorAll( '.migrator-export-path:checked' ).forEach( function ( cb ) {
+			opts[ 'options[exclude_paths][' + pi++ + ']' ] = cb.value;
+		} );
 
 		post( 'migrator_export_start', opts ).then( function ( res ) {
 			if ( ! res || ! res.success ) {

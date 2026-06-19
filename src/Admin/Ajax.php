@@ -146,11 +146,24 @@ final class Ajax implements HasHooks
      */
     private function readExportOptions(): ExportOptions
     {
+        // Nonce is verified by the caller (exportStart/exportStep) before this runs.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing
         $flags = [];
         foreach (ExportOptions::keys() as $key) {
-            $flags[$key] = isset($_POST['options'][$key]) // phpcs:ignore WordPress.Security.NonceVerification.Missing
-                && '' !== sanitize_text_field(wp_unslash((string) $_POST['options'][$key])); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+            $flags[$key] = isset($_POST['options'][$key])
+                && '' !== sanitize_text_field(wp_unslash((string) $_POST['options'][$key]));
         }
+
+        $tables = isset($_POST['options']['exclude_tables']) && is_array($_POST['options']['exclude_tables'])
+            ? array_map('sanitize_text_field', wp_unslash($_POST['options']['exclude_tables']))
+            : [];
+        $paths = isset($_POST['options']['exclude_paths']) && is_array($_POST['options']['exclude_paths'])
+            ? array_map('sanitize_text_field', wp_unslash($_POST['options']['exclude_paths']))
+            : [];
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
+
+        $flags['exclude_tables'] = $tables;
+        $flags['exclude_paths']  = $paths;
 
         return ExportOptions::fromArray($flags);
     }

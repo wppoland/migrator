@@ -59,6 +59,51 @@ defined('ABSPATH') || exit;
 				<?php endforeach; ?>
 			</details>
 
+			<?php
+			global $wpdb;
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$migrator_tables = $wpdb->get_col($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($wpdb->prefix) . '%'));
+			$migrator_tables = is_array($migrator_tables) ? $migrator_tables : [];
+
+			$migrator_content = untrailingslashit((string) WP_CONTENT_DIR);
+			$migrator_entries = [];
+			foreach ((array) @scandir($migrator_content) as $migrator_entry) {
+				if ('.' === $migrator_entry || '..' === $migrator_entry || 'migrator-backups' === $migrator_entry) {
+					continue;
+				}
+				$migrator_entries[] = $migrator_entry;
+			}
+			sort($migrator_entries);
+			?>
+
+			<?php if ([] !== $migrator_tables) : ?>
+				<details class="migrator-options">
+					<summary><?php esc_html_e('Exclude specific database tables (optional)', 'migrator'); ?></summary>
+					<div class="migrator-options__grid">
+						<?php foreach ($migrator_tables as $migrator_table) : ?>
+							<label class="migrator-options__opt">
+								<input type="checkbox" class="migrator-export-table" value="<?php echo esc_attr((string) $migrator_table); ?>">
+								<code><?php echo esc_html((string) $migrator_table); ?></code>
+							</label>
+						<?php endforeach; ?>
+					</div>
+				</details>
+			<?php endif; ?>
+
+			<?php if ([] !== $migrator_entries) : ?>
+				<details class="migrator-options">
+					<summary><?php esc_html_e('Exclude specific files and folders (optional)', 'migrator'); ?></summary>
+					<div class="migrator-options__grid">
+						<?php foreach ($migrator_entries as $migrator_entry) : ?>
+							<label class="migrator-options__opt">
+								<input type="checkbox" class="migrator-export-path" value="<?php echo esc_attr((string) $migrator_entry); ?>">
+								<?php echo esc_html((string) $migrator_entry); ?>
+							</label>
+						<?php endforeach; ?>
+					</div>
+				</details>
+			<?php endif; ?>
+
 			<button type="button" class="button button-primary button-hero" id="migrator-export-start">
 				<?php esc_html_e('Create backup', 'migrator'); ?>
 			</button>

@@ -36,17 +36,28 @@ final class ExportOptions
         'no_action_scheduler',
     ];
 
+    /** @var string[] Specific tables the user chose to leave out. */
+    private array $tables;
+
+    /** @var string[] Specific wp-content-relative paths the user chose to leave out. */
+    private array $paths;
+
     /**
      * @param array<string, bool> $flags
+     * @param string[]            $tables Exact table names to skip.
+     * @param string[]            $paths  wp-content-relative paths to prune.
      */
-    public function __construct(array $flags = [])
+    public function __construct(array $flags = [], array $tables = [], array $paths = [])
     {
-        $this->flags = $flags;
+        $this->flags  = $flags;
+        $this->tables = $tables;
+        $this->paths  = $paths;
     }
 
     /**
      * Build from a raw request/CLI array, coercing values to booleans and
-     * ignoring unknown keys.
+     * ignoring unknown keys. Accepts optional `exclude_tables` and
+     * `exclude_paths` lists for table- and file-level exclusion.
      *
      * @param array<string, mixed> $raw
      */
@@ -57,7 +68,32 @@ final class ExportOptions
             $flags[$key] = ! empty($raw[$key]);
         }
 
-        return new self($flags);
+        $tables = self::cleanList($raw['exclude_tables'] ?? []);
+        $paths  = self::cleanList($raw['exclude_paths'] ?? []);
+
+        return new self($flags, $tables, $paths);
+    }
+
+    /**
+     * Normalise a list option into trimmed, non-empty, unique strings.
+     *
+     * @param mixed $value
+     * @return string[]
+     */
+    private static function cleanList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+        $out = [];
+        foreach ($value as $item) {
+            $item = trim((string) $item);
+            if ('' !== $item) {
+                $out[] = $item;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**
@@ -104,7 +140,16 @@ final class ExportOptions
             $skip[] = $prefix . 'actionscheduler_groups';
         }
 
-        return $skip;
+        // Tables the user picked explicitly. Only those belonging to this site
+        // (matching the prefix) are honoured, so a stray value cannot reach
+        // another database on a shared server.
+        foreach ($this->tables as $table) {
+            if (str_starts_with($table, $prefix)) {
+                $skip[] = $table;
+            }
+        }
+
+        return array_values(array_unique($skip));
     }
 
     /**
@@ -163,6 +208,17 @@ final class ExportOptions
 
         if ($this->is('no_cache')) {
             $paths[] = untrailingslashit((string) WP_CONTENT_DIR) . '/cache';
+        }
+
+        // Paths the user picked explicitly, resolved under wp-content. Anything
+        // that tries to climb out with ".." or an absolute path is ignored.
+        $content = untrailingslashit((string) WP_CONTENT_DIR);
+        foreach ($this->paths as $rel) {
+            $rel = ltrim(str_replace('\\', '/', $rel), '/');
+            if ('' === $rel || str_contains($rel, '..')) {
+                continue;
+            }
+            $paths[] = $content . '/' . $rel;
         }
 
         return array_values(array_unique(array_filter($paths)));

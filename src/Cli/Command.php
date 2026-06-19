@@ -31,11 +31,18 @@ final class Command
      * inactive-themes, plugins, inactive-plugins, muplugins, cache,
      * spam-comments, post-revisions, transients, sessions, action-scheduler.
      *
+     * [--exclude-tables=<list>]
+     * : Comma-separated exact table names to leave out of the database dump.
+     *
+     * [--exclude-files=<list>]
+     * : Comma-separated wp-content-relative paths to leave out (e.g. uploads/2019,cache).
+     *
      * ## EXAMPLES
      *
      *     wp migrator export
      *     wp migrator export --output=/tmp/my-site.migrator
      *     wp migrator export --exclude=media,spam-comments,post-revisions,inactive-plugins
+     *     wp migrator export --exclude-tables=wp_actionscheduler_logs --exclude-files=uploads/2019
      *
      * @param array<int, string>    $args       Positional args (unused).
      * @param array<string, string> $assoc_args Flags.
@@ -56,6 +63,8 @@ final class Command
             $name        = str_replace(['no_', '_'], ['', '-'], $key); // no_post_revisions -> post-revisions
             $flags[$key] = in_array($name, $exclude, true);
         }
+        $flags['exclude_tables'] = array_filter(array_map('trim', explode(',', (string) ($assoc_args['exclude-tables'] ?? ''))));
+        $flags['exclude_paths']  = array_filter(array_map('trim', explode(',', (string) ($assoc_args['exclude-files'] ?? ''))));
         $options = ExportOptions::fromArray($flags);
 
         \WP_CLI::log('Exporting site…');
