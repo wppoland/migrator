@@ -144,7 +144,7 @@ final class Ajax implements HasHooks
             // (e.g. encryption). The returned payload is opaque to core and is
             // handed back on the migrator/export_complete action.
             // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified above.
-            $postprocess = apply_filters('migrator/export_postprocess_request', [], wp_unslash($_POST));
+            $postprocess = apply_filters('migrator/postprocess_request', [], wp_unslash($_POST));
             if (is_array($postprocess) && [] !== $postprocess) {
                 update_option(self::POSTPROCESS_OPTION, $postprocess, false);
             } else {
