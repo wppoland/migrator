@@ -104,6 +104,14 @@ defined('ABSPATH') || exit;
 				</details>
 			<?php endif; ?>
 
+			<?php
+			/**
+			 * Fires inside the backup form, below the exclusion options. An add-on
+			 * can render extra controls here, such as a password-encryption option.
+			 */
+			do_action('migrator/export_form_security');
+			?>
+
 			<button type="button" class="button button-primary button-hero" id="migrator-export-start">
 				<?php esc_html_e('Create backup', 'migrator'); ?>
 			</button>

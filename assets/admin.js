@@ -100,6 +100,13 @@
 		document.querySelectorAll( '.migrator-export-path:checked' ).forEach( function ( cb ) {
 			opts[ 'options[exclude_paths][' + pi++ + ']' ] = cb.value;
 		} );
+		// Optional encryption controls, injected by the Pro add-on.
+		var enc = document.getElementById( 'migrator-encrypt' );
+		if ( enc && enc.checked ) {
+			var pw = document.getElementById( 'migrator-encrypt-password' );
+			opts.encrypt = '1';
+			opts.password = pw ? pw.value : '';
+		}
 
 		post( 'migrator_export_start', opts ).then( function ( res ) {
 			if ( ! res || ! res.success ) {

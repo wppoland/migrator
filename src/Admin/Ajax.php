@@ -25,6 +25,9 @@ defined('ABSPATH') || exit;
  */
 final class Ajax implements HasHooks
 {
+    /** Holds an add-on's opaque post-process payload between export start and completion. */
+    private const POSTPROCESS_OPTION = 'migrator_export_postprocess';
+
     public function __construct(
         private ExportPipeline $export,
         private Workspace $workspace,
@@ -135,7 +138,20 @@ final class Ajax implements HasHooks
 
         try {
             $this->export->clear();
-            wp_send_json_success($this->shape($this->export->start($this->readExportOptions())));
+            $job = $this->export->start($this->readExportOptions());
+
+            // Let an add-on register post-processing for the finished archive
+            // (e.g. encryption). The returned payload is opaque to core and is
+            // handed back on the migrator/export_complete action.
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified above.
+            $postprocess = apply_filters('migrator/export_postprocess_request', [], wp_unslash($_POST));
+            if (is_array($postprocess) && [] !== $postprocess) {
+                update_option(self::POSTPROCESS_OPTION, $postprocess, false);
+            } else {
+                delete_option(self::POSTPROCESS_OPTION);
+            }
+
+            wp_send_json_success($this->shape($job));
         } catch (\Throwable $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
@@ -172,7 +188,23 @@ final class Ajax implements HasHooks
     {
         $this->guard();
         try {
-            wp_send_json_success($this->shape($this->export->step()));
+            $job = $this->export->step();
+
+            if ('done' === ($job['status'] ?? '')) {
+                /**
+                 * Fires when a browser export has finished writing. Handlers may
+                 * post-process the archive (e.g. encrypt it) and update the job's
+                 * dest/bytes so the download serves the processed file.
+                 *
+                 * @param string               $dest        Absolute archive path.
+                 * @param array<string, mixed> $postprocess Opaque payload from export start.
+                 */
+                do_action('migrator/export_complete', (string) ($job['dest'] ?? ''), (array) get_option(self::POSTPROCESS_OPTION, []));
+                delete_option(self::POSTPROCESS_OPTION);
+                $job = $this->export->current(); // Re-read: a handler may have changed dest/bytes.
+            }
+
+            wp_send_json_success($this->shape($job));
         } catch (\Throwable $e) {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
