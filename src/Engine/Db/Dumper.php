@@ -129,7 +129,7 @@ final class Dumper
      * The database's character set, sanitised to an identifier for SET NAMES.
      * Falls back to utf8mb4 (the WordPress default) when unavailable.
      */
-    private function charset(): string
+    public function charset(): string
     {
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
         $charset = (string) $this->db->get_var('SELECT @@character_set_database');
@@ -245,19 +245,33 @@ final class Dumper
      *
      * @param resource $handle
      */
-    public function dumpTable(string $table, $handle, ?string $where = null): void
+    /**
+     * Dump a table. Pass $outputTable to write it under a different name (data is
+     * read from $table but the DROP/CREATE/INSERT use $outputTable), which lets a
+     * multisite subsite's wp_2_* tables be exported as standard wp_* tables.
+     *
+     * @param resource $handle
+     */
+    public function dumpTable(string $table, $handle, ?string $where = null, ?string $outputTable = null): void
     {
         $safe = '`' . str_replace('`', '``', $table) . '`';
+        $out  = null === $outputTable ? $safe : '`' . str_replace('`', '``', $outputTable) . '`';
 
-        $this->write($handle, "DROP TABLE IF EXISTS {$safe};\n");
+        $this->write($handle, "DROP TABLE IF EXISTS {$out};\n");
 
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
         $create = $this->db->get_row("SHOW CREATE TABLE {$safe}", ARRAY_N);
         if (is_array($create) && isset($create[1])) {
-            $this->write($handle, $create[1] . ";\n\n");
+            $createSql = (string) $create[1];
+            if (null !== $outputTable) {
+                // Rename the table in its own CREATE statement (the exact
+                // back-ticked name only appears as the table identifier).
+                $createSql = str_replace($safe, $out, $createSql);
+            }
+            $this->write($handle, $createSql . ";\n\n");
         }
 
-        $this->dumpRows($safe, $handle, $where);
+        $this->dumpRows($safe, $handle, $where, $out);
         $this->write($handle, "\n");
     }
 
@@ -266,8 +280,9 @@ final class Dumper
      *
      * @param resource $handle
      */
-    private function dumpRows(string $safe, $handle, ?string $where = null): void
+    private function dumpRows(string $safe, $handle, ?string $where = null, ?string $outSafe = null): void
     {
+        $outSafe ??= $safe;
         $offset  = 0;
         $insert  = '';
         $started = false;
@@ -289,7 +304,7 @@ final class Dumper
                 $values = '(' . $this->rowValues($row) . ')';
 
                 if (! $started) {
-                    $insert  = $this->insertPrefix($safe, array_keys($row)) . $values;
+                    $insert  = $this->insertPrefix($outSafe, array_keys($row)) . $values;
                     $started = true;
                 } else {
                     $insert .= ',' . $values;
