@@ -34,7 +34,13 @@ final class SqlExecutor
 
     private bool $escapeNext = false;
 
-    public function __construct(private \wpdb $db)
+    /**
+     * @param \Closure(string):string|null $transform Optional per-statement
+     *        rewrite applied after cleaning and before execution (used to remap
+     *        table names when importing one site's tables under a new prefix).
+     *        Returning an empty string skips the statement.
+     */
+    public function __construct(private \wpdb $db, private ?\Closure $transform = null)
     {
     }
 
@@ -142,6 +148,13 @@ final class SqlExecutor
         $statement = $this->clean($buffer);
         if ('' === $statement) {
             return false;
+        }
+
+        if (null !== $this->transform) {
+            $statement = ($this->transform)($statement);
+            if ('' === $statement) {
+                return false;
+            }
         }
 
         // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
